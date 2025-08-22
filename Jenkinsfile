@@ -1,65 +1,66 @@
 pipeline {
-    agent any  // Koi bhi free Jenkins agent use kar lega
+    agent any
+
+    environment {
+        IMAGE_NAME = "my-app"
+    }
 
     stages {
-        // PEHLA KAAM: Code Github se le aao
-        stage('Code Checkout') {
+        // Stage 1: Code Checkout
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/Roshanyadav18/my-docker-app2.git'
-                // Apna repository URL daal dena
+                git branch: 'main',
+                     url: 'https://github.com/Roshanyadav18/my-docker-app2.git'
             }
         }
 
-        // DOOSRA KAAM: Automated Tests Chalado
+        // Stage 2: Run Tests
         stage('Run Tests') {
             steps {
-                sh 'npm install'    // Pehle dependencies install karo
-                sh 'npm test'       // Phir tests chalado
-                // Agar Python hai toh: `pytest`
-                // Agar Java hai toh: `mvn test`
+                sh 'npm install'
+                sh 'npm test'
             }
         }
 
-        // TEESRA KAAM: Docker Image Banao
+        // Stage 3: Build Docker Image (YEH WAALA STAGE FAIL HO RAHA HAI)
         stage('Build Docker Image') {
             steps {
                 script {
-                    dockerImage = docker.build("my-app:${env.BUILD_ID}")
-                    // BUILD_ID har build ka unique number hota hai, usse tag kar denge
+                    // Simple command se try karo pehle
+                    sh "docker build -t ${IMAGE_NAME}:${env.BUILD_ID} ."
                 }
             }
         }
 
-        // CHAUTHA KAAM: Container Test Karo (Optional but recommended)
+        // Stage 4: Test Container
         stage('Test Container') {
             steps {
                 script {
-                    // Temporary container chalake dekhlo sab theek hai ya nahi
-                    dockerImage.inside {
-                        sh 'echo "Container is running successfully!"'
-                        // Yahan aur health checks bhi kar sakte ho
-                    }
+                    sh "docker run --rm ${IMAGE_NAME}:${env.BUILD_ID} echo 'Container test successful'"
                 }
             }
         }
 
-        // PAACHAVA KAAM: Docker Image Ko DockerHub Pe Push Karo
+        // Stage 5: Push to DockerHub
         stage('Push to DockerHub') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
-                        dockerImage.push()
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin"
+                        sh "docker push ${IMAGE_NAME}:${env.BUILD_ID}"
                     }
                 }
             }
         }
     }
 
-    // Agar kuch fail hua toh kya karna hai
     post {
         failure {
             echo 'Pipeline failed! Kuch toh gadbad hai!'
-            // Yahan email ya Slack notification bhi bhej sakte ho
         }
         success {
             echo 'Hurray! Sab kuch successful hua!'
