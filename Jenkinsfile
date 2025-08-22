@@ -10,8 +10,10 @@ pipeline {
 
         stage('Install Dependencies & Run Tests') {
             steps {
-                sh 'pip install pytest'
-                sh 'pytest tests/ --maxfail=1 --disable-warnings -q'
+                sh '''
+                pip3 install pytest
+                pytest tests/ --maxfail=1 --disable-warnings -q
+                '''
             }
         }
 
@@ -23,19 +25,23 @@ pipeline {
 
         stage('Push to DockerHub') {
             steps {
-                withCredentials([string(credentialsId: 'dockerhub-pass', variable: 'DOCKER_PASS')]) {
-                    sh """
-                    echo $DOCKER_PASS | docker login -u <roshanyadav18> --password-stdin
-                    docker tag my-docker-app:latest <roshanyadav18>/my-docker-app:latest
-                    docker push <roshanyadav18>/my-docker-app:latest
-                    """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker tag my-docker-app:latest $DOCKER_USER/my-docker-app:latest
+                    docker push $DOCKER_USER/my-docker-app:latest
+                    '''
                 }
             }
         }
 
         stage('Deploy Container') {
             steps {
-                sh 'docker run -d -p 8081:80 my-docker-app:latest'
+                sh '''
+                docker stop my-docker-container || true
+                docker rm my-docker-container || true
+                docker run -d --name my-docker-container -p 8081:80 my-docker-app:latest
+                '''
             }
         }
     }
