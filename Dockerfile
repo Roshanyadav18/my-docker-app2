@@ -1,11 +1,20 @@
-# Use official nginx image
-FROM nginx:alpine
+# Base image lelo (tere tech stack ke hisaab se badal lena)
+FROM node:18-alpine
 
-# Copy HTML file to Nginx default location
-COPY app/index.html /usr/share/nginx/html/index.html
+# App ka directory banao container ke andar
+WORKDIR /app
 
-# Expose port 80
-EXPOSE 80
+# Pehle package files copy karo ( caching ke liye better hai)
+COPY package*.json ./
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Dependencies install karo
+RUN npm install
+
+# Ab poora code copy karo
+COPY . .
+
+# Port expose karo (jo bhi port use kar raha hai app)
+EXPOSE 3000
+
+# App kaise start hogi woh command do
+CMD ["npm", "start"]

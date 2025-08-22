@@ -1,48 +1,68 @@
 pipeline {
-    agent any
+    agent any  // Koi bhi free Jenkins agent use kar lega
 
     stages {
-        stage('Checkout') {
+        // PEHLA KAAM: Code Github se le aao
+        stage('Code Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/Roshanyadav18/my-docker-app2.git'
+                // Apna repository URL daal dena
             }
         }
 
-        stage('Install Dependencies & Run Tests') {
+        // DOOSRA KAAM: Automated Tests Chalado
+        stage('Run Tests') {
             steps {
-                sh '''
-                pip3 install pytest
-                pytest tests/ --maxfail=1 --disable-warnings -q
-                '''
+                sh 'npm install'    // Pehle dependencies install karo
+                sh 'npm test'       // Phir tests chalado
+                // Agar Python hai toh: `pytest`
+                // Agar Java hai toh: `mvn test`
             }
         }
 
+        // TEESRA KAAM: Docker Image Banao
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t my-docker-app:latest .'
-            }
-        }
-
-        stage('Push to DockerHub') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh '''
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    docker tag my-docker-app:latest $DOCKER_USER/my-docker-app:latest
-                    docker push $DOCKER_USER/my-docker-app:latest
-                    '''
+                script {
+                    dockerImage = docker.build("my-app:${env.BUILD_ID}")
+                    // BUILD_ID har build ka unique number hota hai, usse tag kar denge
                 }
             }
         }
 
-        stage('Deploy Container') {
+        // CHAUTHA KAAM: Container Test Karo (Optional but recommended)
+        stage('Test Container') {
             steps {
-                sh '''
-                docker stop my-docker-container || true
-                docker rm my-docker-container || true
-                docker run -d --name my-docker-container -p 8081:80 my-docker-app:latest
-                '''
+                script {
+                    // Temporary container chalake dekhlo sab theek hai ya nahi
+                    dockerImage.inside {
+                        sh 'echo "Container is running successfully!"'
+                        // Yahan aur health checks bhi kar sakte ho
+                    }
+                }
             }
+        }
+
+        // PAACHAVA KAAM: Docker Image Ko DockerHub Pe Push Karo
+        stage('Push to DockerHub') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+    }
+
+    // Agar kuch fail hua toh kya karna hai
+    post {
+        failure {
+            echo 'Pipeline failed! Kuch toh gadbad hai!'
+            // Yahan email ya Slack notification bhi bhej sakte ho
+        }
+        success {
+            echo 'Hurray! Sab kuch successful hua!'
         }
     }
 }
